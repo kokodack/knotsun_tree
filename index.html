@@ -202,7 +202,63 @@
 
   /* ─── 캔버스 & 컨트롤 ────────────────── */
   #canvas { flex: 1; position: relative; }
-  #cy { width: 100%; height: 100%; }
+  #cy { position: relative; z-index: 1; width: 100%; height: 100%; transition: opacity 420ms ease, transform 420ms ease; }
+  #ambient-stars { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .ambient-star {
+    position: absolute; left: var(--x); top: var(--y); width: var(--size); aspect-ratio: 1;
+    background: #fff; opacity: var(--opacity); transform: translate(-50%, -50%) rotate(var(--rotation));
+    clip-path: polygon(50% 0, 58% 36%, 86% 14%, 64% 42%, 100% 50%, 64% 58%, 86% 86%, 58% 64%, 50% 100%, 42% 64%, 14% 86%, 36% 58%, 0 50%, 36% 42%, 14% 14%, 42% 36%);
+    animation: starPulse var(--duration) ease-in-out infinite alternate;
+  }
+  @keyframes starPulse { from { opacity: calc(var(--opacity) * .55); transform: translate(-50%, -50%) rotate(var(--rotation)) scale(.82); } to { opacity: var(--opacity); transform: translate(-50%, -50%) rotate(var(--rotation)) scale(1.08); } }
+
+  /* ─── 계보 / 연대 보기 ────────────────── */
+  .mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .mode-btn {
+    padding: 10px 8px; border: 1px solid var(--border); border-radius: 10px;
+    background: rgba(0,0,0,.2); color: var(--text-dim); font: 600 12px inherit;
+    cursor: pointer; transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+  }
+  .mode-btn:hover { color: #fff; border-color: var(--border-hover); }
+  .mode-btn.active { color: #fff; border-color: rgba(0,217,255,.45); background: rgba(0,217,255,.14); }
+  #solidarity-view {
+    position: absolute; inset: 0; z-index: 3; overflow: hidden;
+    opacity: 0; visibility: hidden; pointer-events: none; transform: scale(1.015);
+    transition: opacity 420ms ease, transform 420ms ease, visibility 0s linear 420ms;
+    background: transparent;
+  }
+  #solidarity-view.active {
+    opacity: 1; visibility: visible; pointer-events: auto; transform: scale(1);
+    transition: opacity 420ms ease, transform 420ms ease;
+  }
+  body.solidarity-mode #cy { opacity: 0; transform: scale(.985); pointer-events: none; }
+  #solidarity-canvas { display: block; width: 100%; height: 100%; cursor: pointer; touch-action: none; }
+  #solidarity-toolbar {
+    position: absolute; left: 20px; bottom: 20px; z-index: 4; display: flex; align-items: center; gap: 8px;
+    padding: 7px; border: 1px solid rgba(255,255,255,.35); border-radius: 14px;
+    background: #090a12;
+  }
+  #solidarity-toolbar button {
+    border: 0; border-radius: 9px; padding: 9px 12px; color: #fff;
+    background: #20212b; font: 600 11px inherit; cursor: pointer;
+  }
+  #solidarity-toolbar button:hover, #solidarity-toolbar button.active { color: #090a12; background: #fff; }
+  #solidarity-toolbar .count-control { display: flex; align-items: center; gap: 4px; }
+  #solidarity-toolbar .count-control button { width: 34px; padding: 9px 0; font-size: 16px; line-height: 1; }
+  #solidarity-count {
+    min-width: 48px; text-align: center; color: #fff;
+    font: 600 11px 'JetBrains Mono', monospace;
+  }
+  #solidarity-caption {
+    position: absolute; left: 22px; top: 22px; z-index: 4; max-width: 320px;
+    color: rgba(255,255,255,.74); font-size: 11px; line-height: 1.55; pointer-events: none;
+  }
+  #solidarity-caption strong { display: block; color: #fff; font-size: 16px; margin-bottom: 3px; }
+  body.solidarity-mode #zoomctl, body.solidarity-mode #zoominfo, body.solidarity-mode #tooltip { opacity: 0; pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) {
+    #cy, #solidarity-view { transition-duration: 0ms; }
+    .ambient-star { animation: none; }
+  }
 
   .float-panel {
     position: absolute;
@@ -407,6 +463,12 @@
     <div class="section-title">검색</div>
     <input type="text" id="search" placeholder="이름 또는 ID (예: O_1_01)">
 
+    <div class="section-title">보기 방식</div>
+    <div class="mode-switch" role="group" aria-label="보기 방식 선택">
+      <button type="button" class="mode-btn active" data-mode="genealogy">계보 모드</button>
+      <button type="button" class="mode-btn" data-mode="solidarity">연대 모드</button>
+    </div>
+
     <div class="section-title">기수 필터</div>
     <div class="btn-group" id="cohortFilter">
       <button class="btn active" data-cohort="all">전체</button>
@@ -445,7 +507,21 @@
       <div class="metric"><span class="k">엣지</span><span class="v" id="stat-edges">0</span></div>
     </div>
 
+    <div id="ambient-stars" aria-hidden="true"></div>
     <div id="cy"></div>
+
+    <section id="solidarity-view" aria-hidden="true">
+      <canvas id="solidarity-canvas" aria-label="서로 손을 잡은 낯선대학 구성원 애니메이션"></canvas>
+      <div id="solidarity-caption"><strong>우리는 연결되어 있습니다</strong>움직이거나 터치해 보세요. 인물을 누르면 계보에서 연결 관계를 볼 수 있습니다.</div>
+      <div id="solidarity-toolbar">
+        <div class="count-control" role="group" aria-label="화면에 표시할 인원 조절">
+          <button type="button" id="solidarity-minus" aria-label="인원 줄이기">−</button>
+          <span id="solidarity-count" aria-live="polite">8명</span>
+          <button type="button" id="solidarity-plus" aria-label="인원 늘리기">＋</button>
+        </div>
+        <button type="button" id="solidarity-reroll">다시 섞기</button>
+      </div>
+    </section>
 
     <div id="zoominfo" class="float-panel"><span id="zoom-val">100</span>%</div>
 
@@ -509,7 +585,7 @@ function cohortColor(value) {
   if (legacy[key]) return legacy[key];
   let hash = 0;
   for (const char of key) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
-  return `hsl(${Math.abs(hash) % 360} 72% 67%)`;
+  return `hsl(${Math.abs(hash) % 360}, 72%, 67%)`;
 }
 
 const COLOR = {
@@ -803,6 +879,7 @@ async function loadApprovedEntries() {
     if (addedNodes.length || addedEdges.length) {
       const activeLayout = document.querySelector('#layoutSelector button.active');
       runLayout(activeLayout ? activeLayout.dataset.layout : 'cose');
+      shufflePeople();
     }
   } catch (error) {
     console.warn('승인된 Google Form 응답을 불러오지 못했습니다. 기본 데이터로 표시합니다.', error);
@@ -910,13 +987,16 @@ function changeBackground() {
 }
 
 // ── 클릭 → 후손 하이라이트
-cy.on('tap', 'node', e => {
-  const root = e.target;
+function highlightGenealogy(root) {
+  if (!root || !root.length) return;
   changeBackground();
   cy.elements().addClass('faded').removeClass('hl-down hl-up rootpick');
   root.successors().removeClass('faded').addClass('hl-down');
   root.predecessors().removeClass('faded').addClass('hl-up');
   root.removeClass('faded').addClass('rootpick');
+}
+cy.on('tap', 'node', e => {
+  highlightGenealogy(e.target);
 });
 cy.on('tap', e => {
   if (e.target === cy) cy.elements().removeClass('faded hl-down hl-up rootpick');
@@ -999,6 +1079,315 @@ document.getElementById('zoom-focus').onclick = () => {
     cy.animate({ fit: { eles: focused, padding: 60 }}, { duration: 500, easing: 'ease-out' });
   }
 };
+
+// ── 반응형 연대 모드
+const solidarityView = document.getElementById('solidarity-view');
+const solidarityCanvas = document.getElementById('solidarity-canvas');
+const solidarityCtx = solidarityCanvas.getContext('2d');
+const solidarityState = {
+  active: false, bw: false, people: [], cells: [], pointer: { x: -9999, y: -9999, active: false },
+  frame: 0, width: 0, height: 0, dpr: 1, count: 8
+};
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// 계보와 연대 모드가 함께 사용하는 반응형 별 배경.
+const ambientStars = document.getElementById('ambient-stars');
+for (let i = 0; i < 42; i++) {
+  const star = document.createElement('span');
+  star.className = 'ambient-star';
+  star.style.setProperty('--x', `${((i * 73 + 19) % 101)}%`);
+  star.style.setProperty('--y', `${((i * 47 + 11) % 97)}%`);
+  star.style.setProperty('--size', `${5 + (i * 7) % 21}px`);
+  star.style.setProperty('--opacity', `${.22 + (i % 6) * .1}`);
+  star.style.setProperty('--rotation', `${(i * 29) % 90}deg`);
+  star.style.setProperty('--duration', `${2.4 + (i % 7) * .55}s`);
+  ambientStars.appendChild(star);
+}
+
+function shufflePeople() {
+  const pool = cy.nodes().map(node => ({
+    id: node.id(), name: node.data('name'), cohort: node.data('firstCohort'),
+    color: node.data('color') || cohortColor(node.data('firstCohort')),
+    emoji: node.data('emoji') || '🧑',
+    style: {
+      type: Math.floor(Math.random() * 3),
+      pose: Math.floor(Math.random() * 12),
+      thickness: 1.08 + Math.random() * .42,
+      armScale: 1.02 + Math.random() * .36,
+      curve: (Math.random() * 2 - 1) * .45,
+      lean: (Math.random() * 2 - 1) * .35
+    }
+  }));
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  solidarityState.people = pool.slice(0, solidarityState.count);
+  document.getElementById('solidarity-count').textContent = `${solidarityState.people.length}명`;
+  document.getElementById('solidarity-minus').disabled = solidarityState.count <= 4;
+  document.getElementById('solidarity-plus').disabled = solidarityState.count >= 24;
+}
+
+function resizeSolidarity() {
+  const rect = solidarityView.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  solidarityState.width = Math.max(1, rect.width);
+  solidarityState.height = Math.max(1, rect.height);
+  solidarityState.dpr = dpr;
+  solidarityCanvas.width = Math.round(rect.width * dpr);
+  solidarityCanvas.height = Math.round(rect.height * dpr);
+  solidarityCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function solidarityGrid() {
+  const count = Math.max(1, solidarityState.people.length);
+  const aspect = Math.max(.55, Math.min(2.2, solidarityState.width / solidarityState.height));
+  let cols = Math.ceil(Math.sqrt(count * aspect));
+  cols = Math.max(2, Math.min(solidarityState.width < 720 ? 3 : 6, cols));
+  return { cols, rows: Math.ceil(count / cols) };
+}
+
+function drawLimb(ctx, x1, y1, x2, y2, x3, y3, color, width) {
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(x2, y2, x3, y3);
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+}
+
+function drawStar(ctx, x, y, radius, points = 8) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const angle = -Math.PI / 2 + i * Math.PI / points;
+    const length = i % 2 ? radius * .22 : radius;
+    const px = x + Math.cos(angle) * length, py = y + Math.sin(angle) * length;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+}
+
+const POSE_PRESETS = [
+  { sx: 0, sy: -.38, drop: 0, rot: 0 },          // 정면
+  { sx: -.05, sy: -.36, drop: .02, rot: -.1 },   // 왼쪽 기울기
+  { sx: .05, sy: -.36, drop: .02, rot: .1 },     // 오른쪽 기울기
+  { sx: -.07, sy: -.34, drop: -.03, rot: -.14 }, // 달리기
+  { sx: .03, sy: -.39, drop: -.09, rot: .05 },   // 점프
+  { sx: 0, sy: -.27, drop: .14, rot: 0 },        // 스쿼트
+  { sx: -.04, sy: -.3, drop: .1, rot: -.08 },    // 런지
+  { sx: .03, sy: -.31, drop: .08, rot: .08 },    // 한쪽 무릎
+  { sx: 0, sy: -.37, drop: 0, rot: -.04 },       // 다리 교차
+  { sx: -.03, sy: -.35, drop: .01, rot: -.08 },  // 한쪽 다리 들기
+  { sx: .02, sy: -.38, drop: -.04, rot: .04 },   // 발끝 점프
+  { sx: 0, sy: -.3, drop: .1, rot: 0 }           // 낮게 앉기
+];
+
+function drawPoseBody(ctx, x, y, bodyH, cellW, torsoW, style) {
+  const pose = style.pose % POSE_PRESETS.length;
+  const p = POSE_PRESETS[pose];
+  const w = torsoW, h = bodyH;
+  ctx.save(); ctx.translate(x, y + p.drop * h); ctx.rotate(p.rot);
+
+  // 모든 포즈에 명확한 어깨–허리 실루엣을 공통으로 사용한다.
+  ctx.fillStyle = '#fff'; ctx.beginPath();
+  const shoulder = w * (style.type === 2 ? 1.05 : .9);
+  const waist = w * (style.type === 1 ? .55 : .68);
+  ctx.moveTo(-shoulder, -h * .38); ctx.quadraticCurveTo(0, -h * .46, shoulder, -h * .38);
+  ctx.lineTo(waist, h * .34); ctx.quadraticCurveTo(0, h * .43, -waist, h * .34);
+  ctx.closePath(); ctx.fill();
+
+  const legW = w * .72;
+  if (pose === 3) { // 달리기
+    drawLimb(ctx, -waist * .45, h * .32, -cellW * .17, h * .46, -cellW * .31, h * .32, '#fff', legW);
+    drawLimb(ctx, waist * .45, h * .32, cellW * .16, h * .58, cellW * .31, h * .63, '#fff', legW);
+  } else if (pose === 4) { // 점프
+    drawLimb(ctx, -waist * .45, h * .32, -cellW * .15, h * .48, -cellW * .29, h * .37, '#fff', legW);
+    drawLimb(ctx, waist * .45, h * .32, cellW * .17, h * .46, cellW * .29, h * .32, '#fff', legW);
+  } else if (pose === 5) { // 스쿼트
+    drawLimb(ctx, -waist * .55, h * .3, -cellW * .2, h * .4, -cellW * .3, h * .62, '#fff', legW * 1.08);
+    drawLimb(ctx, waist * .55, h * .3, cellW * .2, h * .4, cellW * .3, h * .62, '#fff', legW * 1.08);
+  } else if (pose === 6) { // 런지
+    drawLimb(ctx, -waist * .45, h * .32, -cellW * .2, h * .58, -cellW * .34, h * .61, '#fff', legW);
+    drawLimb(ctx, waist * .45, h * .32, cellW * .2, h * .42, cellW * .32, h * .26, '#fff', legW);
+  } else if (pose === 7) { // 한쪽 무릎
+    drawLimb(ctx, -waist * .45, h * .32, -cellW * .12, h * .61, -cellW * .28, h * .63, '#fff', legW);
+    drawLimb(ctx, waist * .45, h * .32, cellW * .19, h * .53, cellW * .31, h * .53, '#fff', legW);
+  } else { // 서기와 기울기
+    drawLimb(ctx, -waist * .45, h * .32, -cellW * .1, h * .58, -cellW * .22, h * .67, '#fff', legW);
+    drawLimb(ctx, waist * .45, h * .32, cellW * .1, h * .58, cellW * .22, h * .67, '#fff', legW);
+  }
+  ctx.restore();
+}
+
+function rotateAnchor(cx, cy, lx, ly, angle) {
+  return { x: cx + lx * Math.cos(angle) - ly * Math.sin(angle), y: cy + lx * Math.sin(angle) + ly * Math.cos(angle) };
+}
+
+function drawBone(ctx, a, b, width) {
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+}
+
+function drawAnchor(ctx, point, radius) {
+  ctx.beginPath(); ctx.arc(point.x, point.y, radius, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+}
+
+function drawArticulatedBody(ctx, cx, cy, h, cellW, torsoW, limbW, style, leftHand, rightHand, time) {
+  const poseIndex = style.pose % POSE_PRESETS.length;
+  const pose = POSE_PRESETS[poseIndex];
+  const angle = pose.rot + Math.sin(time * 1.15 + poseIndex) * .025;
+  const center = { x: cx, y: cy + pose.drop * h };
+  const shoulderL = rotateAnchor(center.x, center.y, -torsoW * .95, -h * .34, angle);
+  const shoulderR = rotateAnchor(center.x, center.y, torsoW * .95, -h * .34, angle);
+  const hipL = rotateAnchor(center.x, center.y, -torsoW * .48, h * .3, angle);
+  const hipR = rotateAnchor(center.x, center.y, torsoW * .48, h * .3, angle);
+
+  const elbowFor = (shoulder, hand, direction) => {
+    const mx = (shoulder.x + hand.x) / 2, my = (shoulder.y + hand.y) / 2;
+    const dx = hand.x - shoulder.x, dy = hand.y - shoulder.y;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const bend = Math.min(cellW * .13, length * .24) * direction;
+    return { x: mx - dy / length * bend, y: my + dx / length * bend };
+  };
+  const elbowL = elbowFor(shoulderL, leftHand, Math.sin(time + poseIndex) > 0 ? 1 : -1);
+  const elbowR = elbowFor(shoulderR, rightHand, Math.cos(time + poseIndex) > 0 ? 1 : -1);
+
+  const legs = [
+    [[-.05,.53,-.06,.72],[.05,.53,.06,.72]],       // 평행하게 서기
+    [[-.12,.52,-.24,.7],[.12,.52,.24,.7]],          // A자
+    [[-.07,.5,-.25,.68],[.09,.55,.29,.62]],         // 걷기
+    [[-.18,.39,-.34,.29],[.12,.53,.31,.68]],        // 달리기
+    [[-.17,.42,-.3,.34],[.17,.42,.3,.34]],          // 공중 점프
+    [[-.2,.42,-.31,.65],[.2,.42,.31,.65]],          // 스쿼트
+    [[-.14,.54,-.34,.65],[.17,.4,.32,.27]],         // 런지
+    [[-.08,.55,-.27,.65],[.18,.48,.34,.52]],        // 한쪽 무릎
+    [[-.04,.52,.13,.7],[.05,.52,-.13,.7]],          // 다리 교차
+    [[-.06,.54,-.1,.72],[.16,.36,.31,.25]],         // 한쪽 다리 들기
+    [[-.08,.46,-.2,.38],[.08,.46,.2,.38]],           // 발끝 점프
+    [[-.21,.38,-.34,.62],[.21,.38,.34,.62]]          // 낮게 앉기
+  ][poseIndex];
+  const kneeL = rotateAnchor(center.x, center.y, legs[0][0] * cellW, legs[0][1] * h, angle);
+  const footL = rotateAnchor(center.x, center.y, legs[0][2] * cellW, legs[0][3] * h, angle);
+  const kneeR = rotateAnchor(center.x, center.y, legs[1][0] * cellW, legs[1][1] * h, angle);
+  const footR = rotateAnchor(center.x, center.y, legs[1][2] * cellW, legs[1][3] * h, angle);
+
+  // 다리와 팔을 관절 단위의 직선 뼈대로 구성한다. 웨이브 곡선은 사용하지 않는다.
+  drawBone(ctx, hipL, kneeL, limbW * 1.05); drawBone(ctx, kneeL, footL, limbW * 1.05);
+  drawBone(ctx, hipR, kneeR, limbW * 1.05); drawBone(ctx, kneeR, footR, limbW * 1.05);
+  drawBone(ctx, shoulderL, elbowL, limbW); drawBone(ctx, elbowL, leftHand, limbW);
+  drawBone(ctx, shoulderR, elbowR, limbW); drawBone(ctx, elbowR, rightHand, limbW);
+
+  // 레퍼런스처럼 넓은 어깨와 좁은 허리를 가진 단순한 블록형 몸통.
+  ctx.beginPath(); ctx.moveTo(shoulderL.x, shoulderL.y);
+  ctx.quadraticCurveTo(center.x, center.y - h * .43, shoulderR.x, shoulderR.y);
+  ctx.lineTo(hipR.x, hipR.y); ctx.quadraticCurveTo(center.x, center.y + h * .38, hipL.x, hipL.y);
+  ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+
+  [shoulderL, shoulderR, elbowL, elbowR, leftHand, rightHand, hipL, hipR, kneeL, kneeR].forEach(point => drawAnchor(ctx, point, Math.max(2.5, limbW * .36)));
+  return rotateAnchor(center.x, center.y, 0, -h * .56, angle);
+}
+
+function drawSolidarity(time) {
+  if (!solidarityState.active) return;
+  const { width, height, pointer, people } = solidarityState;
+  const ctx = solidarityCtx;
+  ctx.clearRect(0, 0, width, height);
+  const { cols, rows } = solidarityGrid();
+  const cellW = width / cols, cellH = height / rows;
+  const now = reducedMotion ? 0 : time * .001;
+  solidarityState.cells = [];
+
+  const starCount = Math.max(14, Math.round(people.length * 1.8));
+  for (let i = 0; i < starCount; i++) {
+    const sx = ((i * 179 + 83) % 997) / 997 * width;
+    const sy = ((i * 263 + 137) % 991) / 991 * height;
+    drawStar(ctx, sx, sy, 8 + (i % 6) * 3.4, i % 3 === 0 ? 10 : 8);
+  }
+
+  for (let i = 0; i < people.length; i++) {
+    const person = people[i];
+    if (!person) continue;
+    const c = i % cols, r = Math.floor(i / cols);
+    const baseX = c * cellW + cellW / 2;
+    const baseY = r * cellH + cellH * .5;
+    const dx = pointer.x - baseX, dy = pointer.y - baseY;
+    const dist = Math.hypot(dx, dy);
+    const influence = pointer.active ? Math.max(0, 1 - dist / Math.max(cellW, cellH) / 1.15) : 0;
+    const sway = Math.sin(now * 1.25 + i * 1.7) * Math.min(11, cellW * .04);
+    const reactX = influence * (-dx / Math.max(1, dist)) * Math.min(28, cellW * .12);
+    const reactY = influence * (-dy / Math.max(1, dist)) * Math.min(18, cellH * .07);
+    const x = baseX + sway + reactX, y = baseY + reactY;
+    const scale = Math.min(cellW / 220, cellH / 270);
+    const bodyH = Math.max(58, 112 * scale);
+    const limbW = Math.max(9, 18 * scale * person.style.armScale);
+    const torsoW = Math.max(12, 23 * scale * person.style.thickness);
+    // 같은 경계에 닿는 두 인물은 완전히 동일한 손 앵커를 공유한다.
+    const sharedHand = boundary => ({
+      x: boundary * cellW,
+      y: r * cellH + cellH * .43 + Math.sin(now * 1.1 + boundary * .83 + r * 1.7) * Math.min(18, cellH * .075)
+    });
+    const leftHand = sharedHand(c), rightHand = sharedHand(c + 1);
+
+    ctx.save();
+    const headAnchor = drawArticulatedBody(ctx, x, y, bodyH, cellW, torsoW, limbW, person.style, leftHand, rightHand, now);
+
+    const emojiSize = Math.max(30, Math.min(58, cellW * .2, cellH * .2));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${emojiSize}px Apple Color Emoji, Segoe UI Emoji, sans-serif`;
+    const headX = headAnchor.x, headY = headAnchor.y - emojiSize * .22;
+    ctx.fillText(person.emoji, headX, headY);
+    const labelY = headY - emojiSize * .72 - 26;
+    ctx.font = `700 ${Math.max(10, Math.min(13, cellW * .045))}px Inter, sans-serif`;
+    ctx.fillStyle = '#fff'; ctx.fillText(person.name, headX, labelY);
+    ctx.font = `600 ${Math.max(8, Math.min(10, cellW * .034))}px Inter, sans-serif`;
+    ctx.fillText(cohortLabel(person.cohort), headX, labelY + 14);
+    ctx.restore();
+    solidarityState.cells.push({ x: c * cellW, y: r * cellH, w: cellW, h: cellH, id: person.id });
+  }
+  solidarityState.frame = requestAnimationFrame(drawSolidarity);
+}
+
+function setViewMode(mode) {
+  const active = mode === 'solidarity';
+  solidarityState.active = active;
+  document.body.classList.toggle('solidarity-mode', active);
+  solidarityView.classList.toggle('active', active);
+  solidarityView.setAttribute('aria-hidden', String(!active));
+  document.querySelectorAll('.mode-btn').forEach(button => button.classList.toggle('active', button.dataset.mode === mode));
+  cancelAnimationFrame(solidarityState.frame);
+  if (active) {
+    if (!solidarityState.people.length) shufflePeople();
+    resizeSolidarity();
+    solidarityState.frame = requestAnimationFrame(drawSolidarity);
+  } else {
+    requestAnimationFrame(() => cy.resize());
+  }
+}
+
+document.querySelectorAll('.mode-btn').forEach(button => button.addEventListener('click', () => setViewMode(button.dataset.mode)));
+document.getElementById('solidarity-reroll').addEventListener('click', () => shufflePeople());
+function changeSolidarityCount(delta) {
+  solidarityState.count = Math.max(4, Math.min(24, solidarityState.count + delta));
+  shufflePeople();
+}
+document.getElementById('solidarity-minus').addEventListener('click', () => changeSolidarityCount(-2));
+document.getElementById('solidarity-plus').addEventListener('click', () => changeSolidarityCount(2));
+solidarityCanvas.addEventListener('pointermove', event => {
+  const rect = solidarityCanvas.getBoundingClientRect();
+  solidarityState.pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top, active: true };
+});
+solidarityCanvas.addEventListener('pointerleave', () => { solidarityState.pointer.active = false; });
+solidarityCanvas.addEventListener('pointerdown', event => {
+  const rect = solidarityCanvas.getBoundingClientRect();
+  const x = event.clientX - rect.left, y = event.clientY - rect.top;
+  const cell = solidarityState.cells.find(item => x >= item.x && x < item.x + item.w && y >= item.y && y < item.y + item.h);
+  if (!cell) return;
+  const node = cy.getElementById(cell.id);
+  setViewMode('genealogy');
+  highlightGenealogy(node);
+  cy.animate({ center: { eles: node }, zoom: 1.35 }, { duration: 520, easing: 'ease-out' });
+});
+window.addEventListener('resize', () => { if (solidarityState.active) resizeSolidarity(); });
+document.addEventListener('visibilitychange', () => {
+  cancelAnimationFrame(solidarityState.frame);
+  if (!document.hidden && solidarityState.active) solidarityState.frame = requestAnimationFrame(drawSolidarity);
+});
 
 // ── Google Form 입력 화면
 // 예: https://docs.google.com/forms/d/e/FORM_ID/viewform?embedded=true
