@@ -14,9 +14,12 @@
 <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
 <style>
   :root {
-    --bg-0: #06070f;
-    --bg-1: #0d0f22;
-    --bg-2: #14162e;
+    --gradient-a:
+      radial-gradient(ellipse at 12% 18%, #532b88 0%, transparent 42%),
+      radial-gradient(ellipse at 84% 22%, #0b6670 0%, transparent 44%),
+      radial-gradient(ellipse at 58% 92%, #722c59 0%, transparent 48%),
+      linear-gradient(135deg, #070912 0%, #11152b 52%, #080b16 100%);
+    --gradient-b: var(--gradient-a);
     --glass: rgba(20, 22, 45, 0.55);
     --glass-strong: rgba(28, 30, 58, 0.85);
     --border: rgba(255,255,255,0.08);
@@ -35,26 +38,39 @@
     margin: 0; padding: 0; height: 100%;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
     color: var(--text);
-    background: var(--bg-0);
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
   }
-  body::before {
+  html { background: #06070f; }
+  body { background: transparent; isolation: isolate; }
+  body::before, body::after {
     content: '';
     position: fixed; inset: 0;
-    background:
-      radial-gradient(circle at 15% 20%, rgba(168, 85, 247, 0.18), transparent 50%),
-      radial-gradient(circle at 85% 75%, rgba(0, 217, 255, 0.15), transparent 50%),
-      radial-gradient(circle at 50% 100%, rgba(255, 61, 154, 0.10), transparent 60%),
-      linear-gradient(135deg, var(--bg-0), var(--bg-1) 50%, var(--bg-0));
-    z-index: -1;
+    z-index: -2;
     animation: bgFloat 30s ease-in-out infinite alternate;
+    transition: opacity 460ms ease;
+    will-change: opacity, transform;
   }
+  body::before { background: var(--gradient-a); opacity: 1; }
+  body::after  { background: var(--gradient-b); opacity: 0; }
+  body.gradient-swap::before { opacity: 0; }
+  body.gradient-swap::after  { opacity: 1; }
   @keyframes bgFloat {
     0%   { transform: scale(1) translate(0, 0); }
     100% { transform: scale(1.15) translate(-3%, -2%); }
   }
+  @media (prefers-reduced-motion: reduce) {
+    body::before, body::after { transition-duration: 0ms; animation: none; }
+  }
   #app { display: flex; height: 100vh; }
+  #app::after {
+    content: '';
+    position: fixed; inset: 0;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.9'/%3E%3C/svg%3E");
+  }
 
   /* ─── 사이드바 (글래스) ────────────────── */
   #sidebar {
@@ -427,55 +443,15 @@ function nodeColor(n) {
   return COLOR.cohort[n.firstCohort] || '#666';
 }
 function nodeSize(n) {
-  return Math.min(88, Math.max(34, 34 + (n.childCount || 0) * 2.5));
+  return Math.min(96, Math.max(24, 24 + (n.childCount || 0) * 3));
 }
 function glowColor(n) {
   const c = nodeColor(n);
   return c;
 }
 
-// 인물마다 겹치지 않는 얼굴/사람 이모지를 고정 배정한다.
-// 피부색, 머리 모양, 직업 표현을 조합해 현재 199명보다 넉넉한 후보를 만든다.
-const EMOJI_TONES = ['', '🏻', '🏼', '🏽', '🏾', '🏿'];
-const EMOJI_TEMPLATES = [
-  '🧑{t}', '👩{t}', '👨{t}', '👧{t}', '👦{t}', '👵{t}', '👴{t}',
-  '🧑{t}‍🦰', '👩{t}‍🦰', '👨{t}‍🦰',
-  '🧑{t}‍🦱', '👩{t}‍🦱', '👨{t}‍🦱',
-  '🧑{t}‍🦳', '👩{t}‍🦳', '👨{t}‍🦳',
-  '🧑{t}‍🦲', '👩{t}‍🦲', '👨{t}‍🦲',
-  '🧑{t}‍⚕️', '👩{t}‍⚕️', '👨{t}‍⚕️',
-  '🧑{t}‍🎓', '👩{t}‍🎓', '👨{t}‍🎓',
-  '🧑{t}‍🏫', '👩{t}‍🏫', '👨{t}‍🏫',
-  '🧑{t}‍⚖️', '👩{t}‍⚖️', '👨{t}‍⚖️',
-  '🧑{t}‍🌾', '👩{t}‍🌾', '👨{t}‍🌾',
-  '🧑{t}‍🍳', '👩{t}‍🍳', '👨{t}‍🍳',
-  '🧑{t}‍🔧', '👩{t}‍🔧', '👨{t}‍🔧',
-  '🧑{t}‍💼', '👩{t}‍💼', '👨{t}‍💼',
-  '🧑{t}‍🔬', '👩{t}‍🔬', '👨{t}‍🔬',
-  '🧑{t}‍💻', '👩{t}‍💻', '👨{t}‍💻',
-  '🧑{t}‍🎤', '👩{t}‍🎤', '👨{t}‍🎤',
-  '🧑{t}‍🎨', '👩{t}‍🎨', '👨{t}‍🎨',
-  '🧑{t}‍✈️', '👩{t}‍✈️', '👨{t}‍✈️',
-  '🧑{t}‍🚀', '👩{t}‍🚀', '👨{t}‍🚀',
-  '🧑{t}‍🚒', '👩{t}‍🚒', '👨{t}‍🚒'
-];
-const UNIQUE_EMOJIS = EMOJI_TEMPLATES.flatMap(template =>
-  EMOJI_TONES.map(tone => template.replace('{t}', tone))
-);
-const emojiById = new Map(
-  [...DATA.nodes]
-    .sort((a, b) => a.id.localeCompare(b.id, 'en'))
-    .map((node, index) => [node.id, UNIQUE_EMOJIS[index]])
-);
-
-function emojiImage(emoji) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><text x="64" y="101" text-anchor="middle" font-size="94" font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif">${emoji}</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
 const elements = [];
 DATA.nodes.forEach(n => {
-  const emoji = emojiById.get(n.id);
   elements.push({ data: {
     id: n.id, name: n.name,
     cohorts: n.cohorts, roles: n.roles,
@@ -483,7 +459,6 @@ DATA.nodes.forEach(n => {
     isOriginal7: n.isOriginal7, childCount: n.childCount,
     color: nodeColor(n), glow: glowColor(n),
     size: nodeSize(n),
-    emoji: emoji, emojiImage: emojiImage(emoji),
     labelName: n.name, labelId: n.id, labelBoth: n.name + '\n' + n.id
   }});
 });
@@ -501,27 +476,22 @@ const cy = cytoscape({
     {
       selector: 'node',
       style: {
-        'background-color': 'transparent',
-        'background-opacity': 0,
-        'background-image': 'data(emojiImage)',
-        'background-fit': 'contain',
-        'background-clip': 'none',
-        'background-image-opacity': 1,
+        'background-color': 'data(color)',
+        'background-opacity': 0.95,
         'label': 'data(labelName)',
         'color': '#fff',
         'font-size': 11,
         'font-weight': 600,
         'font-family': 'Inter, -apple-system, "Apple SD Gothic Neo", sans-serif',
-        'text-valign': 'bottom',
+        'text-valign': 'center',
         'text-halign': 'center',
-        'text-margin-y': 9,
         'text-wrap': 'wrap',
         'text-outline-color': '#0a0b1e',
         'text-outline-width': 2.5,
         'text-outline-opacity': 0.9,
         'width': 'data(size)',
         'height': 'data(size)',
-        'border-width': 0,
+        'border-width': 2,
         'border-color': 'data(color)',
         'border-opacity': 0.4,
         'underlay-color': 'data(glow)',
@@ -705,9 +675,43 @@ cy.on('mouseover', 'node', e => showTip(e.target, e));
 cy.on('mouseout', 'node', () => tooltip.style.display = 'none');
 cy.on('pan zoom', () => tooltip.style.display = 'none');
 
+// ── 인물 클릭 배경 팔레트
+// Grainient의 다층 메쉬/그레인 감성을 CSS로 재해석한 독자 팔레트다.
+// 흰색 텍스트와 글래스 패널의 가독성을 유지하도록 딥톤만 사용한다.
+const BACKGROUND_PALETTE = [
+  `radial-gradient(ellipse at 10% 15%, #006d77 0%, transparent 43%), radial-gradient(ellipse at 88% 24%, #3a0ca3 0%, transparent 45%), radial-gradient(ellipse at 62% 92%, #9d174d 0%, transparent 48%), linear-gradient(145deg, #041319 0%, #11102b 52%, #160817 100%)`,
+  `radial-gradient(ellipse at 18% 78%, #0e7490 0%, transparent 45%), radial-gradient(ellipse at 80% 12%, #7e22ce 0%, transparent 43%), radial-gradient(ellipse at 72% 82%, #1d4ed8 0%, transparent 48%), linear-gradient(125deg, #07111f 0%, #17102c 55%, #071423 100%)`,
+  `radial-gradient(ellipse at 12% 25%, #9f1239 0%, transparent 42%), radial-gradient(ellipse at 88% 35%, #c2410c 0%, transparent 44%), radial-gradient(ellipse at 42% 96%, #6d28d9 0%, transparent 50%), linear-gradient(150deg, #1c080d 0%, #26110b 50%, #12091e 100%)`,
+  `radial-gradient(ellipse at 22% 8%, #047857 0%, transparent 45%), radial-gradient(ellipse at 92% 70%, #0369a1 0%, transparent 46%), radial-gradient(ellipse at 34% 92%, #854d0e 0%, transparent 48%), linear-gradient(135deg, #041510 0%, #071b24 55%, #171006 100%)`,
+  `radial-gradient(ellipse at 8% 82%, #7c3aed 0%, transparent 45%), radial-gradient(ellipse at 92% 18%, #be185d 0%, transparent 44%), radial-gradient(ellipse at 48% 48%, #164e63 0%, transparent 52%), linear-gradient(120deg, #10091e 0%, #220b1b 52%, #06171c 100%)`,
+  `radial-gradient(ellipse at 15% 12%, #1d4ed8 0%, transparent 42%), radial-gradient(ellipse at 82% 80%, #0f766e 0%, transparent 46%), radial-gradient(ellipse at 94% 8%, #9333ea 0%, transparent 44%), linear-gradient(155deg, #071026 0%, #061c1b 55%, #170a23 100%)`,
+  `radial-gradient(ellipse at 20% 88%, #b45309 0%, transparent 46%), radial-gradient(ellipse at 85% 16%, #9f1239 0%, transparent 43%), radial-gradient(ellipse at 55% 48%, #4338ca 0%, transparent 50%), linear-gradient(130deg, #1a1005 0%, #210810 52%, #0c0b24 100%)`,
+  `radial-gradient(ellipse at 10% 42%, #0f766e 0%, transparent 44%), radial-gradient(ellipse at 90% 55%, #6d28d9 0%, transparent 46%), radial-gradient(ellipse at 52% 100%, #be123c 0%, transparent 48%), linear-gradient(140deg, #051817 0%, #140c27 54%, #1c080f 100%)`
+];
+let currentBackgroundIndex = -1;
+let showingGradientB = false;
+
+function changeBackground() {
+  let nextIndex;
+  do {
+    nextIndex = Math.floor(Math.random() * BACKGROUND_PALETTE.length);
+  } while (nextIndex === currentBackgroundIndex);
+
+  currentBackgroundIndex = nextIndex;
+  const gradient = BACKGROUND_PALETTE[nextIndex];
+  const rootStyle = document.documentElement.style;
+  const hiddenVariable = showingGradientB ? '--gradient-a' : '--gradient-b';
+  rootStyle.setProperty(hiddenVariable, gradient);
+  showingGradientB = !showingGradientB;
+  requestAnimationFrame(() => {
+    document.body.classList.toggle('gradient-swap', showingGradientB);
+  });
+}
+
 // ── 클릭 → 후손 하이라이트
 cy.on('tap', 'node', e => {
   const root = e.target;
+  changeBackground();
   cy.elements().addClass('faded').removeClass('hl-down hl-up rootpick');
   root.successors().removeClass('faded').addClass('hl-down');
   root.predecessors().removeClass('faded').addClass('hl-up');
@@ -794,4 +798,3 @@ setTimeout(() => {
 </script>
 </body>
 </html>
-
