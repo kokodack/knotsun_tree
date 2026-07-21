@@ -443,15 +443,55 @@ function nodeColor(n) {
   return COLOR.cohort[n.firstCohort] || '#666';
 }
 function nodeSize(n) {
-  return Math.min(96, Math.max(24, 24 + (n.childCount || 0) * 3));
+  return Math.min(88, Math.max(34, 34 + (n.childCount || 0) * 2.5));
 }
 function glowColor(n) {
   const c = nodeColor(n);
   return c;
 }
 
+// 인물마다 겹치지 않는 얼굴/사람 이모지를 고정 배정한다.
+// 피부색, 머리 모양, 직업 표현을 조합해 현재 199명보다 넉넉한 후보를 만든다.
+const EMOJI_TONES = ['', '🏻', '🏼', '🏽', '🏾', '🏿'];
+const EMOJI_TEMPLATES = [
+  '🧑{t}', '👩{t}', '👨{t}', '👧{t}', '👦{t}', '👵{t}', '👴{t}',
+  '🧑{t}‍🦰', '👩{t}‍🦰', '👨{t}‍🦰',
+  '🧑{t}‍🦱', '👩{t}‍🦱', '👨{t}‍🦱',
+  '🧑{t}‍🦳', '👩{t}‍🦳', '👨{t}‍🦳',
+  '🧑{t}‍🦲', '👩{t}‍🦲', '👨{t}‍🦲',
+  '🧑{t}‍⚕️', '👩{t}‍⚕️', '👨{t}‍⚕️',
+  '🧑{t}‍🎓', '👩{t}‍🎓', '👨{t}‍🎓',
+  '🧑{t}‍🏫', '👩{t}‍🏫', '👨{t}‍🏫',
+  '🧑{t}‍⚖️', '👩{t}‍⚖️', '👨{t}‍⚖️',
+  '🧑{t}‍🌾', '👩{t}‍🌾', '👨{t}‍🌾',
+  '🧑{t}‍🍳', '👩{t}‍🍳', '👨{t}‍🍳',
+  '🧑{t}‍🔧', '👩{t}‍🔧', '👨{t}‍🔧',
+  '🧑{t}‍💼', '👩{t}‍💼', '👨{t}‍💼',
+  '🧑{t}‍🔬', '👩{t}‍🔬', '👨{t}‍🔬',
+  '🧑{t}‍💻', '👩{t}‍💻', '👨{t}‍💻',
+  '🧑{t}‍🎤', '👩{t}‍🎤', '👨{t}‍🎤',
+  '🧑{t}‍🎨', '👩{t}‍🎨', '👨{t}‍🎨',
+  '🧑{t}‍✈️', '👩{t}‍✈️', '👨{t}‍✈️',
+  '🧑{t}‍🚀', '👩{t}‍🚀', '👨{t}‍🚀',
+  '🧑{t}‍🚒', '👩{t}‍🚒', '👨{t}‍🚒'
+];
+const UNIQUE_EMOJIS = EMOJI_TEMPLATES.flatMap(template =>
+  EMOJI_TONES.map(tone => template.replace('{t}', tone))
+);
+const emojiById = new Map(
+  [...DATA.nodes]
+    .sort((a, b) => a.id.localeCompare(b.id, 'en'))
+    .map((node, index) => [node.id, UNIQUE_EMOJIS[index]])
+);
+
+function emojiImage(emoji) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><text x="64" y="101" text-anchor="middle" font-size="94" font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif">${emoji}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 const elements = [];
 DATA.nodes.forEach(n => {
+  const emoji = emojiById.get(n.id);
   elements.push({ data: {
     id: n.id, name: n.name,
     cohorts: n.cohorts, roles: n.roles,
@@ -459,6 +499,7 @@ DATA.nodes.forEach(n => {
     isOriginal7: n.isOriginal7, childCount: n.childCount,
     color: nodeColor(n), glow: glowColor(n),
     size: nodeSize(n),
+    emoji: emoji, emojiImage: emojiImage(emoji),
     labelName: n.name, labelId: n.id, labelBoth: n.name + '\n' + n.id
   }});
 });
@@ -476,22 +517,27 @@ const cy = cytoscape({
     {
       selector: 'node',
       style: {
-        'background-color': 'data(color)',
-        'background-opacity': 0.95,
+        'background-color': 'transparent',
+        'background-opacity': 0,
+        'background-image': 'data(emojiImage)',
+        'background-fit': 'contain',
+        'background-clip': 'none',
+        'background-image-opacity': 1,
         'label': 'data(labelName)',
         'color': '#fff',
         'font-size': 11,
         'font-weight': 600,
         'font-family': 'Inter, -apple-system, "Apple SD Gothic Neo", sans-serif',
-        'text-valign': 'center',
+        'text-valign': 'bottom',
         'text-halign': 'center',
+        'text-margin-y': 9,
         'text-wrap': 'wrap',
         'text-outline-color': '#0a0b1e',
         'text-outline-width': 2.5,
         'text-outline-opacity': 0.9,
         'width': 'data(size)',
         'height': 'data(size)',
-        'border-width': 2,
+        'border-width': 0,
         'border-color': 'data(color)',
         'border-opacity': 0.4,
         'underlay-color': 'data(glow)',
@@ -676,8 +722,6 @@ cy.on('mouseout', 'node', () => tooltip.style.display = 'none');
 cy.on('pan zoom', () => tooltip.style.display = 'none');
 
 // ── 인물 클릭 배경 팔레트
-// Grainient의 다층 메쉬/그레인 감성을 CSS로 재해석한 독자 팔레트다.
-// 흰색 텍스트와 글래스 패널의 가독성을 유지하도록 딥톤만 사용한다.
 const BACKGROUND_PALETTE = [
   `radial-gradient(ellipse at 10% 15%, #006d77 0%, transparent 43%), radial-gradient(ellipse at 88% 24%, #3a0ca3 0%, transparent 45%), radial-gradient(ellipse at 62% 92%, #9d174d 0%, transparent 48%), linear-gradient(145deg, #041319 0%, #11102b 52%, #160817 100%)`,
   `radial-gradient(ellipse at 18% 78%, #0e7490 0%, transparent 45%), radial-gradient(ellipse at 80% 12%, #7e22ce 0%, transparent 43%), radial-gradient(ellipse at 72% 82%, #1d4ed8 0%, transparent 48%), linear-gradient(125deg, #07111f 0%, #17102c 55%, #071423 100%)`,
@@ -698,10 +742,8 @@ function changeBackground() {
   } while (nextIndex === currentBackgroundIndex);
 
   currentBackgroundIndex = nextIndex;
-  const gradient = BACKGROUND_PALETTE[nextIndex];
-  const rootStyle = document.documentElement.style;
   const hiddenVariable = showingGradientB ? '--gradient-a' : '--gradient-b';
-  rootStyle.setProperty(hiddenVariable, gradient);
+  document.documentElement.style.setProperty(hiddenVariable, BACKGROUND_PALETTE[nextIndex]);
   showingGradientB = !showingGradientB;
   requestAnimationFrame(() => {
     document.body.classList.toggle('gradient-swap', showingGradientB);
