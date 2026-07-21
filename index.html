@@ -495,6 +495,9 @@ const COHORT_OPTIONS = [
   'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'W'
 ];
 
+// Google Form 응답 시트에서 관리자가 승인한 행만 공개하는 읽기 전용 웹 앱.
+const APPROVED_ENTRIES_URL = 'https://script.google.com/macros/s/AKfycbx_VfzWux4A-riLxZ4MiJA5P9giXlgqqlztQZsBfiATCKfLAMc8aPtc2nPKTvDwVwGLWA/exec';
+
 function cohortKey(value) { return String(value).replace(/기$/, '').trim(); }
 function cohortLabel(value) {
   const key = cohortKey(value);
@@ -734,6 +737,78 @@ const cy = cytoscape({
 document.getElementById('stat-nodes').textContent = DATA.nodes.length;
 document.getElementById('stat-edges').textContent = DATA.edges.length;
 
+function findNodeByName(name) {
+  const matches = cy.nodes().filter(node => node.data('name') === String(name || '').trim());
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function loadApprovedEntries() {
+  try {
+    const response = await fetch(`${APPROVED_ENTRIES_URL}?t=${Date.now()}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    if (!payload.ok || !Array.isArray(payload.entries)) throw new Error(payload.error || 'invalid_response');
+
+    const nodeByEntryId = new Map();
+    const addedNodes = [];
+    const addedEdges = [];
+
+    // 모든 승인 인물을 먼저 만든 뒤 관계선을 연결한다.
+    payload.entries.forEach((entry, index) => {
+      const name = String(entry.name || '').trim();
+      const cohort = cohortKey(entry.cohort);
+      if (!name || !COHORT_OPTIONS.includes(cohort)) return;
+
+      const existing = findNodeByName(name);
+      if (existing) {
+        nodeByEntryId.set(entry.id, existing.id());
+        return;
+      }
+
+      const id = `F_${cohort}_${String(entry.id || index + 1).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      if (cy.getElementById(id).length) {
+        nodeByEntryId.set(entry.id, id);
+        return;
+      }
+
+      const node = {
+        id, name, cohorts: [cohort], roles: { [cohort]: '학생' },
+        firstCohort: cohort, firstRole: '학생', firstParent: entry.recommendedBy || '',
+        isOriginal7: false, childCount: 0
+      };
+      const emoji = UNIQUE_EMOJIS[(DATA.nodes.length + addedNodes.length) % UNIQUE_EMOJIS.length];
+      addedNodes.push({ data: {
+        ...node, color: nodeColor(node), glow: glowColor(node), size: nodeSize(node),
+        emoji, emojiImage: emojiImage(emoji),
+        labelName: name, labelId: id, labelBoth: `${name}\n${id}`
+      }});
+      nodeByEntryId.set(entry.id, id);
+    });
+
+    if (addedNodes.length) cy.add(addedNodes);
+
+    payload.entries.forEach(entry => {
+      const targetId = nodeByEntryId.get(entry.id);
+      const sourceNode = findNodeByName(entry.recommendedBy);
+      if (!targetId || !sourceNode || sourceNode.id() === targetId) return;
+      const cohort = cohortKey(entry.cohort);
+      const edgeId = `FORM_${sourceNode.id()}_${targetId}`;
+      if (cy.getElementById(edgeId).length) return;
+      addedEdges.push({ data: { id: edgeId, source: sourceNode.id(), target: targetId, cohorts: [cohort] }});
+    });
+
+    if (addedEdges.length) cy.add(addedEdges);
+    document.getElementById('stat-nodes').textContent = cy.nodes().length;
+    document.getElementById('stat-edges').textContent = cy.edges().length;
+    if (addedNodes.length || addedEdges.length) {
+      const activeLayout = document.querySelector('#layoutSelector button.active');
+      runLayout(activeLayout ? activeLayout.dataset.layout : 'cose');
+    }
+  } catch (error) {
+    console.warn('승인된 Google Form 응답을 불러오지 못했습니다. 기본 데이터로 표시합니다.', error);
+  }
+}
+
 const LAYOUTS = {
   cose: {
     name: 'cose-bilkent', animate: 'end', animationDuration: 700, animationEasing: 'ease-out',
@@ -954,6 +1029,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && formModal.
 
 // ── 초기 레이아웃 + 로더 제거
 runLayout('cose');
+loadApprovedEntries();
 setTimeout(() => {
   document.getElementById('loader').classList.add('gone');
   updateZoomLabel();
